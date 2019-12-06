@@ -226,7 +226,11 @@ int main()
 			file.close();
 		}
 		}).on("open", [&broadcast_](websocket& ws) {
-			  std::cout << "opened" << std::endl;
+			json  root;
+			root["type"] = "token";
+			root["tokenid"] = ws.uuid();
+			ws.write_string(root.dump());
+			std::cout << "opened" << std::endl;
 		}).on("close", [&broadcast_](websocket& ws) {
 				json root;
 				root["type"] = "tip";

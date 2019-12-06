@@ -144,7 +144,7 @@
 </body>
 <script type="text/babel">
     var real_name = "@{real_name}";
-    var tokenId = "@{tokenid}";
+    var tokenId = null;
     var host = "@{host}";
     class App extends React.Component {
         constructor(props) {
@@ -188,6 +188,9 @@
                         message: "提示",
                         description: json["message"]
                     });
+                    return;
+                }else if(json["type"]==="token"){
+                    tokenId = json["tokenid"];
                     return;
                 }
                 var list = this_.state.list;
