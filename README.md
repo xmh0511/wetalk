@@ -9,3 +9,6 @@ xfinal（websocket）+ react 实现的实时在线h5群聊
 ![img](https://github.com/xmh0511/wetalk/blob/master/img0.png)
 ![img](https://github.com/xmh0511/wetalk/blob/master/img1.png)
 ![img](https://github.com/xmh0511/wetalk/blob/master/img2.png)
+![img](https://github.com/xmh0511/wetalk/blob/master/img3.png)
+![img](https://github.com/xmh0511/wetalk/blob/master/img4.png)
+![img](https://github.com/xmh0511/wetalk/blob/master/img5.png)
