@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>主页</title>
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/antd/3.23.6/antd.min.css" />
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/react@16/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@16/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://momentjs.com/downloads/moment.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/antd/3.23.6/antd.min.js"></script>
+</head>
+<style>
+    .bgBind {
+        min-height: 100vh;
+        width: 100%;
+        background-color: #00beff;
+        position: relative;
+    }
+
+    .loginForm {
+        width: 250px;
+        margin: 0 auto;
+    }
+    .formContent{
+        position: absolute;
+        width:100%;
+        top:calc((100%-160px)/3);
+    }
+</style>
+
+<body>
+    <div class="bgBind" id="root">
+
+    </div>
+</body>
+<script type="text/babel">
+    class App extends React.Component {
+        constructor(props){
+           super(props);
+           this.state = {
+              real_name:"",
+              password:""
+           }
+        }
+        setValue(key,e){
+           this.setState({[key]:e.target.value});
+        }
+
+        Login(){
+            document.getElementById("formData").submit();
+        }
+
+        render() {
+            return (
+                <div class="formContent">
+                    <div class="loginForm">
+                        <antd.Form id="formData" action="/login" method="POST" enctype="application/x-www-form-urlencoded">
+                            <antd.Form.Item >
+                                <antd.Input name="real_name" value={this.state.real_name} prefix={<antd.Icon type="user" style={{ color: 'rgba(0,0,0,.25)' }} />} placeholder="姓名" onChange={this.setValue.bind(this,"real_name")}/>
+                            </antd.Form.Item>
+                            <antd.Form.Item >
+                                <antd.Input name="password" value={this.state.password} type="password" prefix={<antd.Icon type="lock" style={{ color: 'rgba(0,0,0,.25)' }} />} placeholder="密码" onChange={this.setValue.bind(this,"password")}/>
+                            </antd.Form.Item>
+                            <antd.Button type="primary" htmlType="submit" style={{width:"100%"}} onClick={this.Login.bind(this)} >登陆</antd.Button>
+                        </antd.Form>
+                    </div>
+                </div>
+            )
+        }
+    }
+    ReactDOM.render(<App />, document.getElementById("root"));
+</script>
+
+</html>

@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0, user-scalable=no">
+    <title>主页</title>
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/antd/3.23.6/antd.min.css" />
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react@16/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@16/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://momentjs.com/downloads/moment.js" crossorigin></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/antd/3.23.6/antd.min.js" crossorigin></script>
+</head>
+<style>
+    .bgBind {
+        position: absolute;
+        top: 0px;
+        bottom: 0px;
+        left: 0px;
+        right: 0px;
+    }
+
+    .chatStage {
+        position: relative;
+        height: 100%;
+    }
+
+    .chatContent {
+        width: 100%;
+        position: absolute;
+        top: 0px;
+        bottom: 40px;
+        overflow: auto;
+        background-color: #f3f3f3;
+    }
+
+    .chatItem {
+        margin-bottom: 10px;
+        overflow: auto;
+        zoom: 1;
+    }
+
+    .nameP {
+        margin-bottom: 3px;
+        font-weight: 600;
+        font-size: 18px;
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+
+    .textP {
+        padding-right: 18px;
+        padding-left: 18px;
+        padding-bottom: 5px;
+        padding-top: 5px;
+        max-width: 95%;
+        border-radius: 5px;
+        text-overflow: ellipsis;
+        word-break: break-all;
+        margin-right: 10px;
+        margin-left: 10px;
+    }
+
+    .zoomClass {
+        overflow: auto;
+        zoom: 1;
+        width: 100%;
+    }
+
+    .bgContentColor0 {
+        background-color: rgb(158, 234, 106);
+    }
+
+    .bgContentColor1 {
+        background-color: rgb(255, 255, 255);
+    }
+
+    .imgPContent {
+        padding-right: 18px;
+        padding-left: 18px;
+        padding-bottom: 5px;
+        padding-top: 5px;
+        max-width: 95%;
+        border-radius: 5px;
+        overflow: auto;
+        margin-left: 10px;
+        margin-right: 10px;
+    }
+
+    .filePContent {
+        padding-right: 18px;
+        padding-left: 18px;
+        padding-bottom: 5px;
+        padding-top: 5px;
+        max-width: 50%;
+        border-radius: 5px;
+        overflow: auto;
+        margin-left: 10px;
+        margin-right: 10px;
+    }
+
+    .imgP {
+        width: 50%;
+    }
+
+    .cunstomModel .ant-modal-content {
+        background-color: transparent;
+        box-shadow: none !important;
+    }
+
+    .cunstomModel .ant-modal-header {
+        background-color: transparent;
+        border: none !important;
+    }
+
+    .fileIcon {
+        text-align: center;
+        font-size: 25px;
+        margin-bottom: 10px;
+    }
+
+    .fileName {
+        margin-bottom: 5px;
+        text-align: center;
+    }
+
+    .fileSize {
+        margin-bottom: 5px;
+        text-align: center;
+    }
+
+    .filePContent>a {
+        color: black;
+    }
+</style>
+
+<body>
+    <div class="bgBind" id="root">
+
+    </div>
+</body>
+<script type="text/babel">
+    var real_name = "@{real_name}";
+    var tokenId = "@{tokenid}";
+    var host = "@{host}";
+    class App extends React.Component {
+        constructor(props) {
+            super(props);
+            this.state = {
+                list: [],
+                value: "",
+                fileInput: false,
+                modelVisible: false,
+                imgUrl: "",
+                postfileInput: false
+            }
+            this.domRef = React.createRef();
+            this.FileRef = React.createRef();
+            this.timeId = null;
+            this.postFileRef = React.createRef();
+        }
+
+        componentDidMount() {
+            this.wsconnect();
+        }
+
+        wsconnect() {
+            var this_ = this;
+            this.ws = new WebSocket(`ws://${host}/ws`);
+            this.ws.binaryType = 'arraybuffer';
+            this.ws.onopen = function () {
+                console.log("opened");
+                var json = {
+                    type: "add",
+                    tokenid: tokenId,
+                    name: real_name
+                }
+                this_.ws.send(JSON.stringify(json));
+            }
+            this.ws.onmessage = function (evt) {
+                console.log("ws recive size " + evt.data.length);
+                var json = JSON.parse(evt.data);
+                if (json["type"] === "tip") {
+                    antd.notification.open({
+                        message: "提示",
+                        description: json["message"]
+                    });
+                    return;
+                }
+                var list = this_.state.list;
+                json["time"] = this_.getTime();
+                list.push(json);
+                // console.log(json);
+                this_.setState({ list: list }, () => {
+                    //console.log(this_.domRef)
+                    this_.domRef.current.scrollTop = 9999999999;
+                });
+            }
+            this.ws.onclose = function () {
+                if (this_.timeId !== null) {
+                    clearInterval(this_.timeId);
+                    this_.timeId = null;
+                }
+                console.log("closed");
+                antd.notification.open({
+                    message: "提示",
+                    description: "连接已断开 正在重新尝试连接"
+                });
+                this_.wsconnect();
+            }
+            this.timeId = setInterval(() => {
+                var json = {
+                    type: "ping"
+                }
+                this_.ws.send(JSON.stringify(json));
+            }, 30000)
+        }
+
+        getTime() {
+            var DateOjb = new Date();
+            var year = DateOjb.getFullYear();
+            var month = DateOjb.getMonth();
+            var day = DateOjb.getDay();
+            var hour = DateOjb.getHours();
+            var minute = DateOjb.getMinutes() < 10 ? "0" + DateOjb.getMinutes() : DateOjb.getMinutes();
+            var seconds = DateOjb.getSeconds() < 10 ? "0" + DateOjb.getSeconds() : DateOjb.getSeconds();
+            return year + "-" + month + "-" + day + " " + hour + ":" + minute + ":" + seconds;
+        }
+        imgChange(e) {
+            console.info(e.target.files[0]);//图片文件
+            var this_ = this;
+            var reader = new FileReader();
+            reader.onload = (function (file) {
+                return function (e) {
+                    //console.info(this.result); //这个就是base64的数据了
+                    var json = {
+                        type: "chat",
+                        ctype: "img",
+                        message: this.result,
+                        name: real_name,
+                        tokenid: tokenId
+                    }
+                    var str = JSON.stringify(json);
+                    console.info(str.length);
+                    this_.ws.send(str);
+                    var list = this_.state.list;
+                    json["time"] = this_.getTime();
+                    list.push(json);
+                    //console.log(list);
+                    this_.setState({ list: list, value: "" }, () => {
+                        this_.domRef.current.scrollTop = 9999999999;
+                    });
+                    this_.setState({ fileInput: false });
+                    this_.FileRef = React.createRef();
+                };
+            })(e.target.files[0]);
+            reader.readAsDataURL(e.target.files[0]);
+        }
+        postFile(e) {
+            console.log(e.target.files[0]);
+            var file = e.target.files[0];
+            var json = {
+                type: "chat",
+                ctype: "file",
+                size: file.size,
+                fname: file.name,
+                time: this.getTime(),
+                name: real_name,
+                tokenid: tokenId
+            }
+            var list = this.state.list;
+            list.push(json);
+            this.setState({ list: list }, () => {
+                this.domRef.current.scrollTop = 9999999999;
+            });
+            var Form = new FormData();
+            Form.append("file", file);
+            Form.append("tokenid", tokenId);
+            var xml = new XMLHttpRequest();
+            xml.onload = function () {
+                console.log(this);
+            }
+            xml.open("POST", "http://" + host + "/upload", true);
+            xml.send(Form);
+        }
+        postChat(e) {
+            if (e === "") {
+                return;
+            }
+            var json = {
+                type: "chat",
+                ctype: "text",
+                message: e,
+                name: real_name,
+                tokenid: tokenId
+            }
+            this.ws.send(JSON.stringify(json));
+            var list = this.state.list;
+            json["time"] = this.getTime();
+            list.push(json);
+            this.setState({ list: list, value: "" }, () => {
+                this.domRef.current.scrollTop = 9999999999;
+            });
+
+        }
+
+        openFile() {
+            this.setState({ fileInput: true }, () => {
+                this.FileRef.current.click();
+            });
+        }
+
+        openPostFile() {
+            this.setState({ postfileInput: true }, () => {
+                this.postFileRef.current.click();
+            });
+        }
+
+        imgLoad() {
+            console.log("img load");
+            this.domRef.current.scrollTop = 9999999999;
+        }
+
+        showImg(src) {
+            this.setState({ modelVisible: true, imgUrl: src });
+        }
+        render() {
+            return (
+                <div className="chatStage">
+                    <div className="chatContent" ref={this.domRef}>
+                        {
+                            this.state.list.map((value) => {
+                                const props = { style: { float: value.tokenid === tokenId ? "right" : "left" } };
+                                var targetProps = null;
+                                if (value.tokenid !== tokenId) {
+                                    targetProps = { target: "_blank" };
+                                }
+                                var element = null;
+                                if (value.ctype === "text") {
+                                    element = <div className="chatItem">
+                                        <p className="nameP" {...props}>
+                                            <span style={{ color: "#CCC", fontSize: "15px", fontWeight: "400" }}>{value.time}</span>
+                                            &nbsp; &nbsp; &nbsp;
+                                            <span>{value.name}:</span>
+                                        </p>
+                                        <div className="zoomClass">
+                                            <p className={`textP ${value.tokenid === tokenId ? 'bgContentColor0' : 'bgContentColor1'}`} {...props}>{value.message}</p>
+                                        </div>
+                                    </div>
+                                } else if (value.ctype === "img") {
+                                    element = <div className="chatItem" >
+                                        <p className="nameP" {...props}>
+                                            <span style={{ color: "#CCC", fontSize: "15px", fontWeight: "400" }}>{value.time}</span>
+                                            &nbsp; &nbsp; &nbsp;
+                                            <span>{value.name}:</span>
+                                        </p>
+                                        <div className="zoomClass">
+                                            <p className={`imgPContent ${value.tokenid === tokenId ? 'bgContentColor0' : 'bgContentColor1'}`}><img className="imgP" {...props} src={value.message} onClick={this.showImg.bind(this, value.message)} onLoad={this.imgLoad.bind(this)} /></p>
+                                        </div>
+                                    </div>
+                                } else if (value.ctype === "file") {
+                                    element = <div className="chatItem">
+                                        <p className="nameP" {...props}>
+                                            <span style={{ color: "#CCC", fontSize: "15px", fontWeight: "400" }}>{value.time}</span>
+                                            &nbsp; &nbsp; &nbsp;
+                                            <span>{value.name}:</span>
+                                        </p>
+                                        <div className="zoomClass">
+                                            <div className={`filePContent ${value.tokenid === tokenId ? 'bgContentColor0' : 'bgContentColor1'}`} {...props}>
+                                                <a href={`${value.tokenid === tokenId ? "javascript:void(0)" : "http://" + host + value.src}`} {...targetProps}>
+                                                    <p className="fileIcon"><antd.Icon type="file" /></p>
+                                                    <p className="fileName">{value.fname}</p>
+                                                    <p className="fileSize">{(value.size / 1024).toFixed(2)}&nbsp;&nbsp;kb</p>
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                                return (
+                                    element
+                                );
+                            })
+                        }
+                    </div>
+                    <div style={{ display: "flex", position: "absolute", bottom: "0px", width: "100%" }}>
+                        <div style={{ width: "66%" }}>
+                            <antd.Input.Search
+                                placeholder="发送消息"
+                                enterButton="发送"
+                                size="large"
+                                value={this.state.value}
+                                onChange={(e) => { this.setState({ value: e.target.value }) }}
+                                onSearch={this.postChat.bind(this)}
+                            />
+                        </div>
+                        <div style={{ width: "17%" }}>
+                            <antd.Button style={{ width: "100%", height: 40 }} onClick={this.openFile.bind(this)}>图片</antd.Button>
+                        </div>
+                        <div style={{ width: "17%" }}>
+                            <antd.Button style={{ width: "100%", height: 40, backgroundColor: "rgb(158,234,106)" }} onClick={this.openPostFile.bind(this)}>文件</antd.Button>
+                        </div>
+                    </div>
+                    {this.state.fileInput === true ? <input style={{ display: "none" }} ref={this.FileRef} type="file" onChange={this.imgChange.bind(this)} accept=".gif,.jpg,.jpeg,.png" /> : null}
+                    {this.state.postfileInput === true ? <input style={{ display: "none" }} ref={this.postFileRef} type="file" onChange={this.postFile.bind(this)} /> : null}
+                    <antd.Modal
+                        visible={this.state.modelVisible}
+                        title=""
+                        onOk={this.handleOk}
+                        onCancel={() => {
+                            this.setState({ modelVisible: false, imgUrl: null })
+                        }}
+                        bodyStyle={{ backgroundColor: "transparent" }}
+                        footer={null}
+                        wrapClassName="cunstomModel"
+                    >
+                        <div style={{ marginTop: "20px" }}>
+                            <img style={{ width: "100%" }} src={this.state.imgUrl} />
+                        </div>
+                    </antd.Modal>
+                </div>
+            )
+        }
+    }
+    ReactDOM.render(<App />, document.getElementById("root"));
+</script>
+
+</html>
