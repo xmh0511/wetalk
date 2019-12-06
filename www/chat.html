@@ -6,7 +6,7 @@
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0, user-scalable=no">
-    <title>主页</title>
+    <title>聊天室</title>
     <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/antd/3.23.6/antd.min.css" />
     <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
     <script src="https://unpkg.com/react@16/umd/react.production.min.js" crossorigin></script>
@@ -144,7 +144,7 @@
 </body>
 <script type="text/babel">
     var real_name = "@{real_name}";
-    var tokenId = null;
+    var tokenId = "@{tokenid}";
     var host = "@{host}";
     class App extends React.Component {
         constructor(props) {
@@ -169,7 +169,7 @@
 
         wsconnect() {
             var this_ = this;
-            this.ws = new WebSocket(`ws://${host}/ws`);
+            this.ws = new WebSocket(`ws://${host}:8080/ws`);
             this.ws.binaryType = 'arraybuffer';
             this.ws.onopen = function () {
                 console.log("opened");
@@ -188,9 +188,6 @@
                         message: "提示",
                         description: json["message"]
                     });
-                    return;
-                }else if(json["type"]==="token"){
-                    tokenId = json["tokenid"];
                     return;
                 }
                 var list = this_.state.list;

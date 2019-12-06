@@ -33,22 +33,38 @@ public:
 		std::unique_lock<std::mutex> lock(addrm_mutex_);
 		auto ws = weak.lock();
 		if (ws != nullptr) {
-			wslist_.insert(std::make_pair(token, ws));
-			name_list_.insert(std::make_pair(token, name));
+			wslist_[token] = ws;
+			name_list_[token] = name;
 		}
 	}
 	void broadcast(std::string const& except_token, std::string const& message) {
-		std::unique_lock<std::mutex> lock(mutex_);
-		msg_queue_.push(std::make_pair(except_token, message));
-		lock.unlock();
-		cdvr_.notify_all();
+		std::shared_ptr<std::thread> add_thread;
+		add_thread = std::make_shared<std::thread>([this, except_token, message](std::shared_ptr<std::thread>) {
+			std::unique_lock<std::mutex> lock(mutex_);
+			msg_queue_.push(std::make_pair(except_token, message));
+			lock.unlock();
+			cdvr_.notify_all();
+		}, add_thread);
+		add_thread->detach();
 	}
+
 	void remove(std::string const& token) {
 		std::unique_lock<std::mutex> lock(addrm_mutex_);
 		auto iter = wslist_.find(token);
 		if (iter != wslist_.end()) {
 			wslist_.erase(iter);
 			name_list_.erase(token);
+		}
+	}
+
+	void remove(websocket& ws) {
+		std::unique_lock<std::mutex> lock(addrm_mutex_);
+		for (auto iter = wslist_.begin(); iter != wslist_.end();iter++) {
+			if (iter->second == ws.shared_from_this()) {
+				name_list_.erase(iter->first);
+				wslist_.erase(iter);
+				break;
+			}
 		}
 	}
 
@@ -211,11 +227,13 @@ int main()
 				json root;
 				root["type"] = "tip";
 				root["message"] = msg["name"].get<std::string>() + " 加入聊天";
-				broadcast_.broadcast(ws.uuid(), root.dump());
-				broadcast_.add(ws.uuid(),msg["name"].get<std::string>(), ws.shared_from_this());
+				auto tokenid = msg["tokenid"].get<std::string>();
+				broadcast_.broadcast(tokenid, root.dump());
+				broadcast_.add(tokenid,msg["name"].get<std::string>(), ws.shared_from_this());
 			}
 			else if (type == "chat") {
-				broadcast_.broadcast(ws.uuid(), msg_str);
+				auto tokenid = msg["tokenid"].get<std::string>();
+				broadcast_.broadcast(tokenid, msg_str);
 			}
 		}
 		catch (std::exception const& ec) {
@@ -226,10 +244,6 @@ int main()
 			file.close();
 		}
 		}).on("open", [&broadcast_](websocket& ws) {
-			json  root;
-			root["type"] = "token";
-			root["tokenid"] = ws.uuid();
-			ws.write_string(root.dump());
 			std::cout << "opened" << std::endl;
 		}).on("close", [&broadcast_](websocket& ws) {
 				json root;
