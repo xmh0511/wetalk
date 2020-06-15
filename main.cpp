@@ -136,6 +136,13 @@ int main()
 	http_server server(thread_size);
 	server.listen("0.0.0.0", "8020");
 
+	server.set_websocket_check_read_alive_time(60);
+	server.set_websocket_check_write_alive_time(60);
+
+	server.on_error([](std::string const& err) {
+		std::cout << err << std::endl;
+	});
+
 	wsBroadCast broadcast_;
 
 	server.router<GET>("/addpass", [](request& req, response& res) {
@@ -256,6 +263,7 @@ int main()
 				root["type"] = "tip";
 				root["message"] = msg["name"].get<std::string>() + " 加入聊天";
 				auto tokenid = msg["tokenid"].get<std::string>();
+				ws.set_user_data("tokenid", std::shared_ptr<std::string>(new std::string(tokenid)));
 				broadcast_.broadcast(tokenid, root.dump());
 				broadcast_.add(tokenid,msg["name"].get<std::string>(), ws.shared_from_this());
 			}
@@ -274,9 +282,11 @@ int main()
 		}).on("open", [&broadcast_](websocket& ws) {
 			std::cout << "opened" << std::endl;
 		}).on("close", [&broadcast_](websocket& ws) {
+			    auto tokenid = ws.get_user_data<std::shared_ptr<std::string>>("tokenid");
+				std::cout << *tokenid << " has been closed: text" << std::endl;
 				json root;
 				root["type"] = "tip";
-				root["message"] = broadcast_.getname(ws.uuid()) + " 退出文字聊天";
+				root["message"] = broadcast_.getname(*tokenid) + " 退出文字聊天";
 				broadcast_.broadcast(ws.uuid(), root.dump());
 				broadcast_.remove(ws.uuid());
 				ws.shutdown();
@@ -296,6 +306,7 @@ int main()
 				}
 				auto tokenid = msg["tokenid"].get<std::string>();
 				if (type == "add") {
+					ws.set_user_data("tokenid", std::shared_ptr<std::string>(new std::string(tokenid)));
 					broadcast_.addImg(tokenid, ws.shared_from_this());
 				}
 				else if (type == "chat") {
@@ -312,9 +323,11 @@ int main()
 			}).on("open", [&broadcast_](websocket& ws) {
 				//std::cout << "opened" << std::endl;
 			}).on("close", [&broadcast_](websocket& ws) {
+				auto tokenid = ws.get_user_data<std::shared_ptr<std::string>>("tokenid");
+				std::cout << *tokenid << " has been closed: img" << std::endl;
 					json root;
 					root["type"] = "tip";
-					root["message"] = broadcast_.getname(ws.uuid()) + " 退出图片聊天";
+					root["message"] = broadcast_.getname(*tokenid) + " 退出图片聊天";
 					broadcast_.broadcastImg(ws.uuid(), root.dump());
 					broadcast_.remove(ws.uuid());
 					ws.shutdown();
