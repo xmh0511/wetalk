@@ -5,29 +5,29 @@ using namespace xfinal;
 std::vector<std::string> pass_word_pool;
 std::vector<std::shared_ptr<websocket>> wss_;
 class wsBroadCast {
-public:
-	wsBroadCast() {
-		post_msg_thread_ = std::make_unique<std::thread>([this]() {
-			while (true) {
-				std::unique_lock<std::mutex> lock(mutex_);
-				cdvr_.wait(lock, [this]() {
-					return msg_queue_.empty() == false;
-				});
-				auto msg_pair = std::move(msg_queue_.front());
-				msg_queue_.pop();
-				lock.unlock();
-				std::unique_lock<std::mutex> lock_list(addrm_mutex_);
-				auto copy = wslist_;
-				lock_list.unlock();
-				for (auto& iter : copy) {
-					if (iter.first != msg_pair.first) {
-						iter.second->write_string(msg_pair.second);
-					}
-				}
-			}
-		});
-		post_msg_thread_->detach();
-	}
+//public:
+//	wsBroadCast() {
+//		post_msg_thread_ = std::make_unique<std::thread>([this]() {
+//			while (true) {
+//				std::unique_lock<std::mutex> lock(mutex_);
+//				cdvr_.wait(lock, [this]() {
+//					return msg_queue_.empty() == false;
+//				});
+//				auto msg_pair = std::move(msg_queue_.front());
+//				msg_queue_.pop();
+//				lock.unlock();
+//				std::unique_lock<std::mutex> lock_list(addrm_mutex_);
+//				auto copy = wslist_;
+//				lock_list.unlock();
+//				for (auto& iter : copy) {
+//					if (iter.first != msg_pair.first) {
+//						iter.second->write_string(msg_pair.second);
+//					}
+//				}
+//			}
+//		});
+//		post_msg_thread_->detach();
+//	}
 public:
 	void add(std::string const& token, std::string const& name, std::weak_ptr<websocket> weak) {
 		std::unique_lock<std::mutex> lock(addrm_mutex_);
@@ -37,33 +37,57 @@ public:
 			name_list_[token] = name;
 		}
 	}
-	void broadcast(std::string const& except_token, std::string const& message) {
-		std::shared_ptr<std::thread> add_thread;
-		add_thread = std::make_shared<std::thread>([this, except_token, message](std::shared_ptr<std::thread>) {
-			std::unique_lock<std::mutex> lock(mutex_);
-			msg_queue_.push(std::make_pair(except_token, message));
-			lock.unlock();
-			cdvr_.notify_all();
-		}, add_thread);
-		add_thread->detach();
-	}
 
 	void remove(std::string const& token) {
 		std::unique_lock<std::mutex> lock(addrm_mutex_);
+		std::unique_lock<std::mutex> lock2(img_mutex_);
 		auto iter = wslist_.find(token);
 		if (iter != wslist_.end()) {
 			wslist_.erase(iter);
 			name_list_.erase(token);
+			wsimg_list_.erase(token);
 		}
 	}
 
 	void remove(websocket& ws) {
 		std::unique_lock<std::mutex> lock(addrm_mutex_);
+		std::unique_lock<std::mutex> lock2(img_mutex_);
 		for (auto iter = wslist_.begin(); iter != wslist_.end();iter++) {
 			if (iter->second == ws.shared_from_this()) {
 				name_list_.erase(iter->first);
+				wsimg_list_.erase(iter->first);
 				wslist_.erase(iter);
 				break;
+			}
+		}
+	}
+
+	void broadcast(std::string const& except_token, std::string const& message) {
+		std::unique_lock<std::mutex> lock(addrm_mutex_);
+		auto copy = wslist_;
+		lock.unlock();
+		for (auto& iter : copy) {
+			if (iter.first != except_token) {
+				iter.second->write_string(message);
+			}
+		}
+	}
+
+	void addImg(std::string const& token, std::weak_ptr<websocket> weak) {
+		std::unique_lock<std::mutex> lock(img_mutex_);
+		auto ws = weak.lock();
+		if (ws != nullptr) {
+			wsimg_list_[token] = ws;
+		}
+	}
+
+	void broadcastImg(std::string const& except_token, std::string const& message) {
+		std::unique_lock<std::mutex> lock(img_mutex_);
+		auto copy = wsimg_list_;
+		lock.unlock();
+		for (auto& iter : copy) {
+			if (iter.first != except_token) {
+				iter.second->write_string(message);
 			}
 		}
 	}
@@ -77,13 +101,14 @@ public:
 		return "";
 	}
 private:
-	std::mutex mutex_;
+	std::mutex img_mutex_;
 	std::mutex addrm_mutex_;
 	std::unordered_map<std::string, std::shared_ptr<websocket>> wslist_;
+	std::unordered_map<std::string, std::shared_ptr<websocket>> wsimg_list_;
 	std::unordered_map<std::string, std::string> name_list_;
-	std::unique_ptr<std::thread> post_msg_thread_;
-	std::condition_variable cdvr_;
-	std::queue<std::pair<std::string,std::string>> msg_queue_;
+	//std::unique_ptr<std::thread> post_msg_thread_;
+	//std::condition_variable cdvr_;
+	//std::queue<std::pair<std::string,std::string>> msg_queue_;
 };
 
 struct SesionAop {
@@ -107,8 +132,9 @@ int main()
 	std::stringstream ss;
 	ss << file.rdbuf();
 	auto config_json = json::parse(ss.str());
-	http_server server(4);
-	server.listen("0.0.0.0", "8080");
+	auto thread_size = std::thread::hardware_concurrency();
+	http_server server(thread_size);
+	server.listen("0.0.0.0", "8020");
 
 	wsBroadCast broadcast_;
 
@@ -132,7 +158,7 @@ int main()
 		else {
 			res.write_string("existed");
 		}
-		});
+	});
 
 	server.router<GET>("/rmpass", [](request& req, response& res) {
 		auto pass = req.param("pass");
@@ -149,9 +175,10 @@ int main()
 		}
 		});
 
-	server.router<GET>("/", [](request& req, response& res) {
-		res.write_view("./www/index.html", true);
-		});
+	server.router<GET>("/", [config_json](request& req, response& res) {
+		res.set_attr("base_path", config_json["path"].get<std::string>());
+		res.write_file_view("./www/index.html", true);
+	});
 
 
 	server.router<POST>("/login", [config_json](request& req, response& res) {
@@ -162,7 +189,7 @@ int main()
 			return;
 		}
 		bool existed = false;
-		auto size = pass_word_pool.size();
+		//auto size = pass_word_pool.size();
 		for (auto& iter : pass_word_pool) {
 			if (iter == view2str(pass_word)) {
 				existed = true;
@@ -174,12 +201,13 @@ int main()
 			session.set_data("real_name", view2str(real_name));
 			session.set_data("validate", true);
 			session.set_expires(3600);
+			session.get_cookie().set_path(config_json["path"].get<std::string>());
 			res.redirect("http://" + config_json["url"].get<std::string>() + "/chat");
 		}
 		else {
 			res.redirect("http://" + config_json["url"].get<std::string>() + "/");
 		}
-		});
+	});
 
 
 
@@ -191,12 +219,12 @@ int main()
 			res.set_attr("real_name", real_name);
 			res.set_attr("tokenid", session.get_id());
 			res.set_attr("host", config_json["url"].get<std::string>());
-			res.write_view("./www/chat.html");
+			res.write_file_view("./www/chat.html");
 		}
 		else {
 			res.redirect("http://" + config_json["url"].get<std::string>() + "/");
 		}
-		});
+	});
 
 	server.router<POST>("/upload", [&broadcast_](request& req, response& res) {
 		auto& file = req.file("file");
@@ -248,12 +276,50 @@ int main()
 		}).on("close", [&broadcast_](websocket& ws) {
 				json root;
 				root["type"] = "tip";
-				root["message"] = broadcast_.getname(ws.uuid()) + " 退出聊天";
+				root["message"] = broadcast_.getname(ws.uuid()) + " 退出文字聊天";
 				broadcast_.broadcast(ws.uuid(), root.dump());
 				broadcast_.remove(ws.uuid());
-				ws.null_close();
+				ws.shutdown();
 		});
-		server.router("/ws", event);
+		server.router("/room", event);
+
+
+
+		websocket_event eventImg;
+		eventImg.on("message", [&broadcast_](websocket& ws) {
+			auto msg_str = view2str(ws.messages());
+			try {
+				auto msg = json::parse(msg_str);
+				auto type = msg["type"].get<std::string>();
+				if (type == "ping") {
+					return;
+				}
+				auto tokenid = msg["tokenid"].get<std::string>();
+				if (type == "add") {
+					broadcast_.addImg(tokenid, ws.shared_from_this());
+				}
+				else if (type == "chat") {
+					broadcast_.broadcastImg(tokenid, msg_str);
+				}
+			}
+			catch (std::exception const& ec) {
+				std::cout << "json parse error" << std::endl;
+				auto tmpoint = std::time(nullptr);
+				std::ofstream file("./" + std::to_string(tmpoint) + "_error.json", std::ios::app);
+				file << msg_str;
+				file.close();
+			}
+			}).on("open", [&broadcast_](websocket& ws) {
+				//std::cout << "opened" << std::endl;
+			}).on("close", [&broadcast_](websocket& ws) {
+					json root;
+					root["type"] = "tip";
+					root["message"] = broadcast_.getname(ws.uuid()) + " 退出图片聊天";
+					broadcast_.broadcastImg(ws.uuid(), root.dump());
+					broadcast_.remove(ws.uuid());
+					ws.shutdown();
+			});
+		server.router("/roomimg", eventImg);
 
 		server.run();
 		return 0;

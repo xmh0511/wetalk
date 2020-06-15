@@ -160,16 +160,71 @@
             this.domRef = React.createRef();
             this.FileRef = React.createRef();
             this.timeId = null;
+            this.imgtimeId = null;
             this.postFileRef = React.createRef();
         }
 
         componentDidMount() {
             this.wsconnect();
+            this.wsimgconnect();
+        }
+
+        wsimgconnect(){
+            var this_ = this;
+            this.wsimg = new WebSocket(`ws://${host}/roomimg`);
+            this.wsimg.binaryType = 'arraybuffer';
+            this.wsimg.onopen = function () {
+                console.log("img opened");
+                var json = {
+                    type: "add",
+                    tokenid: tokenId,
+                    name: real_name
+                }
+                this_.wsimg.send(JSON.stringify(json));
+            }
+            this.wsimg.onmessage = function (evt) {
+                console.log("ws recive size " + evt.data.length);
+                var json = JSON.parse(evt.data);
+                if (json["type"] === "tip") {
+                    antd.notification.open({
+                        message: "提示",
+                        description: json["message"]
+                    });
+                    return;
+                }
+                var list = this_.state.list;
+                json["time"] = this_.getTime();
+                list.push(json);
+                // console.log(json);
+                this_.setState({ list: list }, () => {
+                    //console.log(this_.domRef)
+                    this_.domRef.current.scrollTop = 9999999999;
+                });
+            }
+
+            this.wsimg.onclose = function () {
+                if (this_.imgtimeId !== null) {
+                    clearInterval(this_.imgtimeId);
+                    this_.imgtimeId = null;
+                }
+                console.log("closed");
+                antd.notification.open({
+                    message: "提示",
+                    description: "连接已断开 正在重新尝试连接"
+                });
+                this_.wsimgconnect();
+            }
+            this.imgtimeId = setInterval(() => {
+                var json = {
+                    type: "ping"
+                }
+                this_.wsimg.send(JSON.stringify(json));
+            }, 30000)
         }
 
         wsconnect() {
             var this_ = this;
-            this.ws = new WebSocket(`ws://${host}:8080/ws`);
+            this.ws = new WebSocket(`ws://${host}/room`);
             this.ws.binaryType = 'arraybuffer';
             this.ws.onopen = function () {
                 console.log("opened");
@@ -245,7 +300,7 @@
                     }
                     var str = JSON.stringify(json);
                     console.info(str.length);
-                    this_.ws.send(str);
+                    this_.wsimg.send(str);
                     var list = this_.state.list;
                     json["time"] = this_.getTime();
                     list.push(json);
