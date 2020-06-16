@@ -6,12 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>主页</title>
-    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/antd/3.23.6/antd.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/antd@3.26.18/dist/antd.min.css" />
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/react@16/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@16/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://momentjs.com/downloads/moment.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/antd/3.23.6/antd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/antd@3.26.18/dist/antd.min.js"></script>
 </head>
 <style>
     .bgBind {
@@ -58,7 +58,7 @@
             return (
                 <div class="formContent">
                     <div class="loginForm">
-                        <antd.Form id="formData" action="@{base_path}/login" method="POST" enctype="application/x-www-form-urlencoded">
+                        <antd.Form id="formData" action="https://@{host}/login" method="POST" enctype="application/x-www-form-urlencoded">
                             <antd.Form.Item >
                                 <antd.Input name="real_name" value={this.state.real_name} prefix={<antd.Icon type="user" style={{ color: 'rgba(0,0,0,.25)' }} />} placeholder="姓名" onChange={this.setValue.bind(this,"real_name")}/>
                             </antd.Form.Item>

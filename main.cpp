@@ -38,27 +38,21 @@ public:
 		}
 	}
 
-	void remove(std::string const& token) {
+	void remove_text(std::string const& token) {
 		std::unique_lock<std::mutex> lock(addrm_mutex_);
-		std::unique_lock<std::mutex> lock2(img_mutex_);
 		auto iter = wslist_.find(token);
 		if (iter != wslist_.end()) {
 			wslist_.erase(iter);
 			name_list_.erase(token);
-			wsimg_list_.erase(token);
 		}
 	}
 
-	void remove(websocket& ws) {
-		std::unique_lock<std::mutex> lock(addrm_mutex_);
+	void remove_img(std::string const& token) {
 		std::unique_lock<std::mutex> lock2(img_mutex_);
-		for (auto iter = wslist_.begin(); iter != wslist_.end();iter++) {
-			if (iter->second == ws.shared_from_this()) {
-				name_list_.erase(iter->first);
-				wsimg_list_.erase(iter->first);
-				wslist_.erase(iter);
-				break;
-			}
+		auto iter = wsimg_list_.find(token);
+		if (iter != wsimg_list_.end()) {
+			wsimg_list_.erase(iter);
+			name_list_img_.erase(token);
 		}
 	}
 
@@ -73,11 +67,12 @@ public:
 		}
 	}
 
-	void addImg(std::string const& token, std::weak_ptr<websocket> weak) {
+	void addImg(std::string const& token, std::string const& name, std::weak_ptr<websocket> weak) {
 		std::unique_lock<std::mutex> lock(img_mutex_);
 		auto ws = weak.lock();
 		if (ws != nullptr) {
 			wsimg_list_[token] = ws;
+			name_list_img_[token] = name;
 		}
 	}
 
@@ -100,29 +95,36 @@ public:
 		}
 		return "";
 	}
+	std::string getname_img(std::string const& uuid) {
+		std::unique_lock<std::mutex> lock(img_mutex_);
+		auto iter = name_list_img_.find(uuid);
+		if (iter != name_list_img_.end()) {
+			return iter->second;
+		}
+		return "";
+	}
 private:
 	std::mutex img_mutex_;
 	std::mutex addrm_mutex_;
 	std::unordered_map<std::string, std::shared_ptr<websocket>> wslist_;
 	std::unordered_map<std::string, std::shared_ptr<websocket>> wsimg_list_;
 	std::unordered_map<std::string, std::string> name_list_;
+	std::unordered_map<std::string, std::string> name_list_img_;
 	//std::unique_ptr<std::thread> post_msg_thread_;
 	//std::condition_variable cdvr_;
 	//std::queue<std::pair<std::string,std::string>> msg_queue_;
 };
 
-struct SesionAop {
-	bool before(request& req, response& res) {
+struct SesionInterceptor {
+	bool prehandle(request& req, response& res) {
 		auto& session = req.session();
 		if (session.get_data<bool>("validate") != true) {
-			auto& file = req.file("file");
-			fs::remove(file.path());
 			res.write_state(http_status::bad_request);
 			return false;
 		}
 		return true;
 	}
-	bool after(request& req, response& res) {
+	bool posthandle(request& req, response& res) {
 		return true;
 	}
 };
@@ -184,6 +186,7 @@ int main()
 
 	server.router<GET>("/", [config_json](request& req, response& res) {
 		res.set_attr("base_path", config_json["path"].get<std::string>());
+		res.set_attr("host", config_json["url"].get<std::string>());
 		res.write_file_view("./www/index.html", true);
 	});
 
@@ -248,7 +251,7 @@ int main()
 		root["name"] = real_name;
 		broadcast_.broadcast(tokenId, root.dump());
 		res.write_json(root);
-		}, SesionAop{});
+		}, SesionInterceptor{});
 
 
 
@@ -283,13 +286,12 @@ int main()
 			std::cout << "opened" << std::endl;
 		}).on("close", [&broadcast_](websocket& ws) {
 			    auto tokenid = ws.get_user_data<std::shared_ptr<std::string>>("tokenid");
-				std::cout << *tokenid << " has been closed: text" << std::endl;
+				std::cout << *tokenid << " has been closed: text, it's uuid: "<< ws.uuid() << std::endl;
 				json root;
 				root["type"] = "tip";
 				root["message"] = broadcast_.getname(*tokenid) + " 退出文字聊天";
-				broadcast_.broadcast(ws.uuid(), root.dump());
-				broadcast_.remove(ws.uuid());
-				ws.shutdown();
+				broadcast_.broadcast(*tokenid, root.dump());
+				broadcast_.remove_text(*tokenid);
 		});
 		server.router("/room", event);
 
@@ -306,8 +308,9 @@ int main()
 				}
 				auto tokenid = msg["tokenid"].get<std::string>();
 				if (type == "add") {
+					auto name = msg["name"].get<std::string>();
 					ws.set_user_data("tokenid", std::shared_ptr<std::string>(new std::string(tokenid)));
-					broadcast_.addImg(tokenid, ws.shared_from_this());
+					broadcast_.addImg(tokenid, name, ws.shared_from_this());
 				}
 				else if (type == "chat") {
 					broadcast_.broadcastImg(tokenid, msg_str);
@@ -324,13 +327,12 @@ int main()
 				//std::cout << "opened" << std::endl;
 			}).on("close", [&broadcast_](websocket& ws) {
 				auto tokenid = ws.get_user_data<std::shared_ptr<std::string>>("tokenid");
-				std::cout << *tokenid << " has been closed: img" << std::endl;
+				std::cout << *tokenid << " has been closed: img, its uuid: "<<ws.uuid() << std::endl;
 					json root;
 					root["type"] = "tip";
-					root["message"] = broadcast_.getname(*tokenid) + " 退出图片聊天";
-					broadcast_.broadcastImg(ws.uuid(), root.dump());
-					broadcast_.remove(ws.uuid());
-					ws.shutdown();
+					root["message"] = broadcast_.getname_img(*tokenid) + " 退出图片聊天";
+					broadcast_.broadcastImg(*tokenid, root.dump());
+					broadcast_.remove_img(*tokenid);
 			});
 		server.router("/roomimg", eventImg);
 
