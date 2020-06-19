@@ -5,29 +5,6 @@ using namespace xfinal;
 std::vector<std::string> pass_word_pool;
 std::vector<std::shared_ptr<websocket>> wss_;
 class wsBroadCast {
-//public:
-//	wsBroadCast() {
-//		post_msg_thread_ = std::make_unique<std::thread>([this]() {
-//			while (true) {
-//				std::unique_lock<std::mutex> lock(mutex_);
-//				cdvr_.wait(lock, [this]() {
-//					return msg_queue_.empty() == false;
-//				});
-//				auto msg_pair = std::move(msg_queue_.front());
-//				msg_queue_.pop();
-//				lock.unlock();
-//				std::unique_lock<std::mutex> lock_list(addrm_mutex_);
-//				auto copy = wslist_;
-//				lock_list.unlock();
-//				for (auto& iter : copy) {
-//					if (iter.first != msg_pair.first) {
-//						iter.second->write_string(msg_pair.second);
-//					}
-//				}
-//			}
-//		});
-//		post_msg_thread_->detach();
-//	}
 public:
 	void add(std::string const& token, std::string const& name, std::weak_ptr<websocket> weak) {
 		std::unique_lock<std::mutex> lock(addrm_mutex_);
@@ -286,12 +263,15 @@ int main()
 			std::cout << "opened" << std::endl;
 		}).on("close", [&broadcast_](websocket& ws) {
 			    auto tokenid = ws.get_user_data<std::shared_ptr<std::string>>("tokenid");
-				std::cout << *tokenid << " has been closed: text, it's uuid: "<< ws.uuid() << std::endl;
-				json root;
-				root["type"] = "tip";
-				root["message"] = broadcast_.getname(*tokenid) + " 退出文字聊天";
-				broadcast_.broadcast(*tokenid, root.dump());
-				broadcast_.remove_text(*tokenid);
+				std::cout << "text shared_ptr use count: " << ws.shared_from_this().use_count() << "  tokenid == " << tokenid << std::endl;
+				if (tokenid != nullptr) {
+					std::cout << *tokenid << " has been closed: text, it's uuid: " << ws.uuid() << std::endl;
+					json root;
+					root["type"] = "tip";
+					root["message"] = broadcast_.getname(*tokenid) + " 退出文字聊天";
+					broadcast_.broadcast(*tokenid, root.dump());
+					broadcast_.remove_text(*tokenid);
+				}
 		});
 		server.router("/room", event);
 
@@ -327,12 +307,15 @@ int main()
 				//std::cout << "opened" << std::endl;
 			}).on("close", [&broadcast_](websocket& ws) {
 				auto tokenid = ws.get_user_data<std::shared_ptr<std::string>>("tokenid");
-				std::cout << *tokenid << " has been closed: img, its uuid: "<<ws.uuid() << std::endl;
+				std::cout << "img shared_ptr use count: " << ws.shared_from_this().use_count() <<"  tokenid == "<< tokenid << std::endl;
+				if (tokenid != nullptr) {
 					json root;
+					std::cout << *tokenid << " has been closed: img, its uuid: " << ws.uuid() << std::endl;
 					root["type"] = "tip";
 					root["message"] = broadcast_.getname_img(*tokenid) + " 退出图片聊天";
 					broadcast_.broadcastImg(*tokenid, root.dump());
 					broadcast_.remove_img(*tokenid);
+				}
 			});
 		server.router("/roomimg", eventImg);
 

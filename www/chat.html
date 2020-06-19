@@ -7,12 +7,15 @@
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0, user-scalable=no">
     <title>聊天室</title>
-    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/antd/3.23.6/antd.min.css" />
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react@16/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@16/umd/react-dom.production.min.js" crossorigin></script>
-    <script src="https://momentjs.com/downloads/moment.js" crossorigin></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/antd/3.23.6/antd.min.js" crossorigin></script>
+    <link rel="stylesheet" type="text/css" href="https://@{host}/static/lib/antd.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://@{host}/static/editormd.min.css" />
+    <script src="https://@{host}/static/lib/jquery.min.js" crossorigin></script>
+    <script src="https://@{host}/static/editormd.min.js" crossorigin></script>
+    <script src="https://@{host}/static/lib/babel.min.js" crossorigin></script>
+    <script src="https://@{host}/static/lib/react.production.min.js" crossorigin></script>
+    <script src="https://@{host}/static/lib/react-dom.production.min.js" crossorigin></script>
+    <script src="https://@{host}/static/lib/moment.js" crossorigin></script>
+    <script src="https://@{host}/static/lib/antd.min.js" crossorigin></script>
 </head>
 <style>
     .bgBind {
@@ -32,7 +35,7 @@
         width: 100%;
         position: absolute;
         top: 0px;
-        bottom: 40px;
+        bottom: 60px;
         overflow: auto;
         background-color: #f3f3f3;
     }
@@ -62,6 +65,10 @@
         word-break: break-all;
         margin-right: 10px;
         margin-left: 10px;
+        max-width: 100%;
+    }
+    .textP>*{
+        max-width: 100%;
     }
 
     .zoomClass {
@@ -103,7 +110,7 @@
     }
 
     .imgP {
-        width: 50%;
+        max-width: 100%;
     }
 
     .cunstomModel .ant-modal-content {
@@ -135,6 +142,42 @@
     .filePContent>a {
         color: black;
     }
+
+    /* .editormd-toolbar {
+        display: none !important;
+        height: 0px !important;
+        min-height: 0px !important;
+    }
+
+
+
+    .CodeMirror-gutters {
+        display: none !important;
+    } */
+
+    #chat-editor {
+        margin-bottom: 0px;
+    }
+
+    .CodeMirror-linenumber {
+        display: none;
+    }
+
+    .myChatInput {
+        display: flex;
+    }
+
+    .chatcontent {
+        width: 70%;
+    }
+
+    .postChat {
+        width: 30%;
+    }
+
+    .operatorPortion {
+        height: 60px;
+    }
 </style>
 
 <body>
@@ -146,7 +189,7 @@
     var real_name = "@{real_name}";
     var tokenId = "@{tokenid}";
     var host = "@{host}";
-    console.log("tokenid",tokenId);
+    console.log("tokenid", tokenId);
     class App extends React.Component {
         constructor(props) {
             super(props);
@@ -157,7 +200,7 @@
                 modelVisible: false,
                 imgUrl: "",
                 postfileInput: false,
-                audioVer:new Date().getTime()
+                audioVer: new Date().getTime()
             }
             this.domRef = React.createRef();
             this.FileRef = React.createRef();
@@ -165,20 +208,107 @@
             this.imgtimeId = null;
             this.postFileRef = React.createRef();
             this.audioRef = React.createRef();
+            this.markdownHandle = null;
+            this.is_markdown_init = false;
         }
 
         componentDidMount() {
             this.wsconnect();
             this.wsimgconnect();
+            setTimeout(() => {
+                this.iniitMarkDown();
+            })
         }
 
-        notifyAudio(){
-            this.setState({audioVer:new Date().getTime()},()=>{
+        // componentDidUpdate() {
+        //     console.log(22);
+        //     if (!this.is_markdown_init) {
+        //         console.log(22322);
+        //         this.iniitMarkDown();
+        //         this.is_markdown_init = true;
+        //     }
+        // }
+
+        notifyAudio() {
+            this.setState({ audioVer: new Date().getTime() }, () => {
                 this.audioRef.current.play();
             });
         }
 
-        wsimgconnect(){
+        iniitMarkDown() {
+            this.markdownHandle = editormd("chat-editor", {
+                toolbarIcons: () => {
+                    return [];
+                },
+                saveHTMLToTextarea: true,
+                width: "100%",
+                height: "100%",
+                path: "static/lib/",
+                watch: false,
+                placeholder: "",
+                toolbar: false,
+                // previewCodeHighlight: false,
+                lineWrapping: false,
+                lineNumbers: false,
+                gotoLine: false,
+                styleActiveLine: false,
+                htmlDecode: true
+            });
+            var this_ = this;
+            document.getElementsByTagName("body")[0].addEventListener('paste', function (e) {
+                console.log("paste", e);
+                var clipboard = e.clipboardData;
+                console.log(clipboard);
+                // Mac平台下Chrome49版本以下 复制Finder中的文件的Bug Hack掉
+                if (clipboard.items && clipboard.items.length === 2 && clipboard.items[0].kind === "string" && clipboard.items[1].kind === "file" &&
+                    clipboard.types && clipboard.types.length === 2 && clipboard.types[0] === "text/plain" && clipboard.types[1] === "Files" &&
+                    ua.match(/Macintosh/i) && Number(ua.match(/Chrome\/(\d{2})/i)[1]) < 49) {
+                    return;
+                }
+                for (var i = 0; i < clipboard.items.length; i++) {
+                    var item = clipboard.items[i];
+                    console.log("past files",item.kind);
+                    if (item.kind === "file") {
+                        var blob = item.getAsFile();
+                        if (blob.size === 0) {
+                            return;
+                        }
+                        var fileReader = new FileReader();
+                        fileReader.onloadend = function (e) {
+                            // 这里省略了一部分代码，用来实现图片预览的
+                            //console.log(e.target.result);
+                            this_.sendImg(e.target.result);
+
+                        };
+                        fileReader.readAsDataURL(blob);
+                        // blob 就是从剪切板获得的文件 可以进行上传或其他操作
+                    }
+                }
+                //e.preventDefault();
+            }, false);
+        }
+
+        sendImg(data) {
+            var json = {
+                type: "chat",
+                ctype: "img",
+                message: data,
+                name: real_name,
+                tokenid: tokenId
+            }
+            var str = JSON.stringify(json);
+            console.info(str.length);
+            this.wsimg.send(str);
+            var list = this.state.list;
+            json["time"] = this.getTime();
+            list.push(json);
+            //console.log(list);
+            this.setState({ list: list, value: "" }, () => {
+                this.domRef.current.scrollTop = 9999999999;
+            });
+        }
+
+        wsimgconnect() {
             var this_ = this;
             this.wsimg = new WebSocket(`wss://${host}/roomimg`);
             this.wsimg.binaryType = 'arraybuffer';
@@ -353,13 +483,14 @@
             xml.send(Form);
         }
         postChat(e) {
-            if (e === "") {
+            var msg = this.markdownHandle.getHTML();
+            if (msg === "") {
                 return;
             }
             var json = {
                 type: "chat",
                 ctype: "text",
-                message: e,
+                message: msg,
                 name: real_name,
                 tokenid: tokenId
             }
@@ -370,7 +501,7 @@
             this.setState({ list: list, value: "" }, () => {
                 this.domRef.current.scrollTop = 9999999999;
             });
-
+            this.markdownHandle.clear();
         }
 
         openFile() {
@@ -413,7 +544,7 @@
                                             <span>{value.name}:</span>
                                         </p>
                                         <div className="zoomClass">
-                                            <p className={`textP ${value.tokenid === tokenId ? 'bgContentColor0' : 'bgContentColor1'}`} {...props}>{value.message}</p>
+                                            <div className={`textP ${value.tokenid === tokenId ? 'bgContentColor0' : 'bgContentColor1'}`} {...props} dangerouslySetInnerHTML={{ __html: value.message }}></div>
                                         </div>
                                     </div>
                                 } else if (value.ctype === "img") {
@@ -451,22 +582,28 @@
                             })
                         }
                     </div>
-                    <div style={{ display: "flex", position: "absolute", bottom: "0px", width: "100%" }}>
-                        <div style={{ width: "66%" }}>
-                            <antd.Input.Search
+                    <div style={{ display: "flex", position: "absolute", bottom: "0px", width: "100%" }} className="operatorPortion">
+                        <div className="myChatInput" style={{ width: "66%", height: "100%" }}>
+                            {/*<antd.Input.Search
                                 placeholder="发送消息"
                                 enterButton="发送"
                                 size="large"
                                 value={this.state.value}
                                 onChange={(e) => { this.setState({ value: e.target.value }) }}
                                 onSearch={this.postChat.bind(this)}
-                            />
+                            /> */}
+                            <div id="chat-editor" className="chatcontent">
+                                <textarea style={{ display: "none" }} />
+                            </div>
+                            <div className="postChat">
+                                <antd.Button type="primary" style={{ width: "100%", height: "100%" }} onClick={this.postChat.bind(this)}>发送</antd.Button>
+                            </div>
                         </div>
-                        <div style={{ width: "17%" }}>
-                            <antd.Button style={{ width: "100%", height: 40 }} onClick={this.openFile.bind(this)}>图片</antd.Button>
+                        <div style={{ width: "17%", height: "100%" }}>
+                            <antd.Button style={{ width: "100%", height: "100%" }} onClick={this.openFile.bind(this)}>图片</antd.Button>
                         </div>
-                        <div style={{ width: "17%" }}>
-                            <antd.Button style={{ width: "100%", height: 40, backgroundColor: "rgb(158,234,106)" }} onClick={this.openPostFile.bind(this)}>文件</antd.Button>
+                        <div style={{ width: "17%", height: "100%" }}>
+                            <antd.Button style={{ width: "100%", height: "100%", backgroundColor: "rgb(158,234,106)" }} onClick={this.openPostFile.bind(this)}>文件</antd.Button>
                         </div>
                     </div>
                     {this.state.fileInput === true ? <input style={{ display: "none" }} ref={this.FileRef} type="file" onChange={this.imgChange.bind(this)} accept=".gif,.jpg,.jpeg,.png" /> : null}
@@ -486,7 +623,7 @@
                             <img style={{ width: "100%" }} src={this.state.imgUrl} />
                         </div>
                     </antd.Modal>
-                    <audio style={{display:"none"}} ref={this.audioRef} src={`https://${host}/static/notify.mp3?ver=${this.state.audioVer}`}></audio>
+                    <audio style={{ display: "none" }} ref={this.audioRef} src={`https://${host}/static/notify.mp3?ver=${this.state.audioVer}`}></audio>
                 </div>
             )
         }
